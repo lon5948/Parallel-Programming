@@ -33,28 +33,41 @@ void top_down_step(
     vertex_set *new_frontier,
     int *distances)
 {
-    for (int i = 0; i < frontier->count; i++)
+    #pragma omp parallel 
     {
+        int tmp = 0;
+        Vertex* temp_frontier = (Vertex*)malloc(sizeof(Vertex) * g->num_nodes);
 
-        int node = frontier->vertices[i];
-
-        int start_edge = g->outgoing_starts[node];
-        int end_edge = (node == g->num_nodes - 1)
-                           ? g->num_edges
-                           : g->outgoing_starts[node + 1];
-
-        // attempt to add all neighbors to the new frontier
-        for (int neighbor = start_edge; neighbor < end_edge; neighbor++)
+        #pragma omp for
+        for (int i = 0; i < frontier->count; i++)
         {
-            int outgoing = g->outgoing_edges[neighbor];
 
-            if (distances[outgoing] == NOT_VISITED_MARKER)
+            int node = frontier->vertices[i];
+
+            int start_edge = g->outgoing_starts[node];
+            int end_edge = (node == g->num_nodes - 1)
+                            ? g->num_edges
+                            : g->outgoing_starts[node + 1];
+
+            // attempt to add all neighbors to the new frontier
+            for (int neighbor = start_edge; neighbor < end_edge; neighbor++)
             {
-                distances[outgoing] = distances[node] + 1;
-                int index = new_frontier->count++;
-                new_frontier->vertices[index] = outgoing;
+                int outgoing = g->outgoing_edges[neighbor];
+
+                if(distances[outgoing] == NOT_VISITED_MARKER && __sync_bool_compare_and_swap(&distances[outgoing], NOT_VISITED_MARKER, distances[node] + 1))
+                {
+                    temp_frontier[tmp++] = outgoing;
+                }
             }
         }
+
+        #pragma omp critical
+        {
+            memcpy(new_frontier->vertices + new_frontier->count, temp_frontier, sizeof(int) * tmp);
+            new_frontier->count += tmp;
+        }
+
+        free(temp_frontier);
     }
 }
 
@@ -74,9 +87,11 @@ void bfs_top_down(Graph graph, solution *sol)
     vertex_set *new_frontier = &list2;
 
     // initialize all nodes to NOT_VISITED
+    #pragma omp parallel for
     for (int i = 0; i < graph->num_nodes; i++)
         sol->distances[i] = NOT_VISITED_MARKER;
 
+    
     // setup frontier with the root node
     frontier->vertices[frontier->count++] = ROOT_NODE_ID;
     sol->distances[ROOT_NODE_ID] = 0;
