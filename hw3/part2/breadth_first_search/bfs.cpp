@@ -33,12 +33,12 @@ void top_down_step(
     vertex_set *new_frontier,
     int *distances)
 {
-    #pragma omp parallel 
+    #pragma omp parallel
     {
-        int tmp = 0;
+        int cnt = 0 ;
         Vertex* temp_frontier = (Vertex*)malloc(sizeof(Vertex) * g->num_nodes);
 
-        #pragma omp parallel for
+        #pragma omp for 
         for (int i = 0; i < frontier->count; i++)
         {
 
@@ -49,22 +49,22 @@ void top_down_step(
                             ? g->num_edges
                             : g->outgoing_starts[node + 1];
 
-            // attempt to add all neighbors to the new frontier
+            // attempt to add all neighbors to local frontier
             for (int neighbor = start_edge; neighbor < end_edge; neighbor++)
             {
                 int outgoing = g->outgoing_edges[neighbor];
-
                 if(distances[outgoing] == NOT_VISITED_MARKER && __sync_bool_compare_and_swap(&distances[outgoing], NOT_VISITED_MARKER, distances[node] + 1))
                 {
-                    temp_frontier[tmp++] = outgoing;
+                    temp_frontier[cnt] = outgoing;
+                    cnt++;
                 }
             }
         }
-
+        // memcpy to new frontier
         #pragma omp critical
         {
-            memcpy(new_frontier->vertices + new_frontier->count, temp_frontier, sizeof(int) * tmp);
-            new_frontier->count += tmp;
+            memcpy(new_frontier->vertices + new_frontier->count, temp_frontier, sizeof(int) * cnt);
+            new_frontier->count += cnt;
         }
 
         free(temp_frontier);
@@ -127,7 +127,7 @@ void bottom_up_step(
     int depth)
 {   
     // for(each vertex v in graph)
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(dynamic, 512)
     for (int i = 0; i < g->num_nodes; i++)
     {
         // if(v has not been visited &&
@@ -137,18 +137,19 @@ void bottom_up_step(
             int end_edge = (i == g->num_nodes - 1)
                         ? g->num_edges
                         : g->incoming_starts[i + 1];
-            
+
             for (int neighbor = start_edge; neighbor < end_edge; neighbor++)
             {
-                int incoming= g->incoming_edges[neighbor];
+                int incoming = g->incoming_edges[neighbor];
 
                 // v shares an incoming edge with a vertex u on the frontier)
                 if(distances[incoming] == depth)
                 {
                     // add vertex v to frontier;
-                    distances[i] = distances[incoming] + 1;
+                    distances[i] = depth + 1;
+                    frontier->vertices[i] = 1;
                     new_frontier->vertices[__sync_fetch_and_add(&new_frontier->count, 1)] = i;
-                    break;
+                    break; 
                 }
             }
         }
@@ -221,6 +222,7 @@ void bfs_hybrid(Graph graph, solution *sol)
     sol->distances[ROOT_NODE_ID] = 0;
 
     int depth = 0;
+    bool using_bot = 0;
     while (frontier->count != 0)
     {
 
@@ -230,10 +232,12 @@ void bfs_hybrid(Graph graph, solution *sol)
 
         vertex_set_clear(new_frontier);
 
-        if(graph->num_edges / graph->num_nodes > 25)
-            bottom_up_step(graph, frontier, new_frontier, sol->distances, depth);
-        else
-            top_down_step(graph, frontier, new_frontier, sol->distances);
+		if((float)(frontier->count)/(float)(graph->num_nodes) < 0.1) {
+			top_down_step(graph, frontier, new_frontier, sol->distances);
+		}
+		else {
+			bottom_up_step(graph, frontier, new_frontier, sol->distances, depth);
+		}
 
         #ifdef VERBOSE
                 double end_time = CycleTimer::currentSeconds();
