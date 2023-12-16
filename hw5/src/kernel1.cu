@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#deifne N 16
+#define BLOCK_SIZE 16
 
-__global__ void mandelKernel(float lowerX, float lowerY, float stepX, float stepY, int *d_img, int resX, int resY, int maxIterations) {
+__global__ void mandelKernel(float lowerX, float lowerY, float stepX, float stepY, int *d_img, int resX, int maxIterations) {
     // To avoid error caused by the floating number, use the following pseudo code
     //
     // float x = lowerX + thisX * stepX;
@@ -19,7 +19,7 @@ __global__ void mandelKernel(float lowerX, float lowerY, float stepX, float step
     float z_re = c_re, z_im = c_im;
 
     int i;
-    for (i = 0; i < count; ++i) {
+    for (i = 0; i < maxIterations; ++i) {
 
         if (z_re * z_re + z_im * z_im > 4.f)
             break;
@@ -44,10 +44,10 @@ void hostFE (float upperX, float upperY, float lowerX, float lowerY, int* img, i
     int *d_img;
     cudaMalloc((void **)&d_img, size);
     
-    dim3 threadsPerBlock(N, N);
-    dim3 numBlocks(resX / N, resY / N);
+    dim3 threadsPerBlock(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 numBlocks(resX / BLOCK_SIZE, resY / BLOCK_SIZE);
 
-    mandelKernel<<<numBlocks, threadsPerBlock>>>(lowerX, lowerY, stepX, stepY, d_img, resX, resY, maxIterations);
+    mandelKernel<<<numBlocks, threadsPerBlock>>>(lowerX, lowerY, stepX, stepY, d_img, resX, maxIterations);
     
     cudaMemcpy(h_img, d_img, size, cudaMemcpyDeviceToHost);
     memcpy(img, h_img, size);
