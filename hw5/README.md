@@ -1,3 +1,4 @@
+## CUDA Programming
 ### Problem Statement: Paralleling Fractal Generation with CUDA
 
 Following part 2 of HW2, we are going to parallelize fractal generation by using CUDA.
