@@ -90,7 +90,7 @@ outputImage[idy * imageWidth + idx] = sum;
 
 2. Plot a chart to show the performance difference between using OpenCL and CUDA
 
-    ![image](https://hackmd.io/_uploads/ryZZCEEu6.png)
+    ![image](images/figure3.png)
 
 3. Explain the result
 
